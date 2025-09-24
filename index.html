@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SVG Destructor mit p5.js</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+    <!-- Bibliothek für Boolean-Operationen auf SVG-Pfaden -->
+    <script src="https://unpkg.com/svg-path-booleans@1.0.0/dist/booleans.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overflow: hidden; /* Verhindert Scrollbalken durch das Canvas */
+        }
+        input[type="range"] {
+            accent-color: #0891b2; /* Dunkleres Cyan für besseren Kontrast */
+        }
+        #canvas-container {
+            width: 100%;
+            max-width: 768px; /* Entspricht der Viewbox-Größe für 1:1 Mapping */
+            aspect-ratio: 1 / 1;
+        }
+        #download-btn:disabled {
+            cursor: not-allowed;
+            background-color: #67e8f9;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-900 min-h-screen flex items-center justify-center p-4 relative">
+
+    <!-- Container für die p5.js Canvas -->
+    <div id="canvas-container"></div>
+
+    <!-- Container für die Steuerungselemente -->
+    <div class="absolute bottom-4 right-4 w-full max-w-xs bg-white/80 backdrop-blur-sm rounded-2xl shadow-2xl p-4 border border-gray-200">
+        <h1 class="text-xl font-bold text-cyan-700 text-center mb-4">Destructor</h1>
+        <div class="space-y-4">
+            <!-- Regler -->
+            <div>
+                <label for="density" class="flex justify-between items-center text-xs font-medium text-gray-600">
+                    <span>Pixel-Dichte</span>
+                    <span id="density-value" class="font-mono text-cyan-700">1.0</span>
+                </label>
+                <input id="density" type="range" min="0.2" max="5" value="1.0" step="0.1" class="w-full h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer">
+            </div>
+            <div>
+                <label for="noise" class="flex justify-between items-center text-xs font-medium text-gray-600">
+                    <span>Störung (Ausbrüche)</span>
+                    <span id="noise-value" class="font-mono text-cyan-700">0.10</span>
+                </label>
+                <input id="noise" type="range" min="0" max="1" value="0.1" step="0.01" class="w-full h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer">
+            </div>
+            <div>
+                <label for="jitter" class="flex justify-between items-center text-xs font-medium text-gray-600">
+                    <span>Verschiebung (Jitter)</span>
+                    <span id="jitter-value" class="font-mono text-cyan-700">10</span>
+                </label>
+                <input id="jitter" type="range" min="0" max="50" value="10" step="1" class="w-full h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer">
+            </div>
+            <div>
+                <label for="pixelSize" class="flex justify-between items-center text-xs font-medium text-gray-600">
+                    <span>Pixel-Größe</span>
+                    <span id="pixelSize-value" class="font-mono text-cyan-700">12</span>
+                </label>
+                <input id="pixelSize" type="range" min="2" max="50" value="12" step="1" class="w-full h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer">
+            </div>
+        </div>
+        <div class="mt-6 text-center">
+            <button id="download-btn" class="w-full bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-2 px-4 rounded-lg transition-all duration-300 ease-in-out text-sm">
+                SVG Herunterladen
+            </button>
+        </div>
+    </div>
+
+    <!-- Das originale SVG, unsichtbar, nur als Datenquelle -->
+    <svg width="0" height="0" style="position:absolute; visibility: hidden;">
+      <path id="original-path" d="M764.635 768H565.385L514.821 606.952H249.93L199.471 768H0.220703L259.021 0.964844H505.835L764.635 768ZM294.051 466.13H470.607L385.237 194.222H379.244L294.051 466.13Z"/>
+    </svg>
+
+    <script>
+        // UI-Elemente
+        const sliders = {
+            density: document.getElementById('density'),
+            noise: document.getElementById('noise'),
+            jitter: document.getElementById('jitter'),
+            pixelSize: document.getElementById('pixelSize'),
+        };
+        const downloadBtn = document.getElementById('download-btn');
+        
+        // Farben
+        const BG_COLOR = '#ffffff';
+        const FG_COLOR = '#000000';
+
+        // p5.js Sketch
+        const sketch = (p) => {
+            const CANVAS_SIZE = 768;
+            let shapeBuffer;
+            let contourPoints = [];
+
+            p.setup = () => {
+                const container = document.getElementById('canvas-container');
+                const canvas = p.createCanvas(CANVAS_SIZE, CANVAS_SIZE);
+                canvas.parent(container);
+                p.noLoop();
+                shapeBuffer = p.createGraphics(CANVAS_SIZE, CANVAS_SIZE);
+                drawSvgPathToBuffer();
+                sampleContourPoints();
+                Object.values(sliders).forEach(slider => slider.addEventListener('input', () => {
+                    updateLabels();
+                    p.redraw();
+                }));
+                downloadBtn.addEventListener('click', generateAndDownloadSVG);
+                updateLabels();
+                p.redraw();
+            };
+
+            p.draw = () => {
+                const noise = parseFloat(sliders.noise.value);
+                const jitter = parseFloat(sliders.jitter.value);
+                const baseSize = parseFloat(sliders.pixelSize.value);
+                p.background(BG_COLOR);
+                p.image(shapeBuffer, 0, 0);
+                p.fill(BG_COLOR);
+                p.noStroke();
+                p.rectMode(p.CENTER);
+                for (const point of contourPoints) {
+                    if (p.random() < noise) continue;
+                    const jitterX = p.random(-jitter, jitter);
+                    const jitterY = p.random(-jitter, jitter);
+                    const size = p.random(baseSize * 0.7, baseSize * 1.3);
+                    p.rect(point.x + jitterX, point.y + jitterY, size, size);
+                }
+            };
+            
+            window.sampleContourPoints = () => {
+                const density = parseFloat(sliders.density.value);
+                contourPoints = [];
+                const pathData = document.getElementById('original-path').getAttribute('d');
+                const subPaths = pathData.split(/(?=M)/g).filter(s => s.trim().length > 0);
+                if (subPaths.length === 0) return [];
+
+                subPaths.forEach(pathD => {
+                    const tempPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                    tempPath.setAttribute('d', pathD);
+                    const totalLength = tempPath.getTotalLength();
+                    for (let i = 0; i < totalLength; i += (1 / density)) {
+                        const pt = tempPath.getPointAtLength(i);
+                        contourPoints.push({ x: pt.x, y: pt.y });
+                    }
+                });
+
+                return contourPoints;
+            }
+
+            function drawSvgPathToBuffer() {
+                const pathData = document.getElementById('original-path').getAttribute('d');
+                const path = new Path2D(pathData);
+                shapeBuffer.drawingContext.fillStyle = FG_COLOR;
+                shapeBuffer.drawingContext.fill(path);
+            }
+            
+            sliders.density.addEventListener('input', () => {
+                sampleContourPoints();
+                updateLabels();
+                p.redraw();
+            });
+        };
+
+        async function generateAndDownloadSVG() {
+            const originalText = downloadBtn.textContent;
+            downloadBtn.disabled = true;
+            downloadBtn.textContent = 'Verarbeite...';
+
+            try {
+                await new Promise(resolve => setTimeout(resolve, 10));
+
+                const noise = parseFloat(sliders.noise.value);
+                const jitter = parseFloat(sliders.jitter.value);
+                const baseSize = parseFloat(sliders.pixelSize.value);
+                // Wichtig: Neugenerierung der Punkte für Konsistenz
+                const contourPoints = window.sampleContourPoints();
+                const blackShapePath = document.getElementById('original-path').getAttribute('d');
+
+                // 1. Array mit Pfaden für alle "Löcher" erstellen
+                const holePaths = [];
+                for (const point of contourPoints) {
+                    if (Math.random() < noise) continue;
+                    const jitterX = (Math.random() - 0.5) * 2 * jitter;
+                    const jitterY = (Math.random() - 0.5) * 2 * jitter;
+                    const size = (Math.random() * 0.6 + 0.7) * baseSize;
+                    const x = point.x + jitterX - size / 2;
+                    const y = point.y + jitterY - size / 2;
+                    holePaths.push(`M ${x} ${y} h ${size} v ${size} h ${-size} Z`);
+                }
+
+                if (holePaths.length === 0) {
+                    // Falls keine Löcher generiert wurden, direkt das Original speichern
+                    const svgContent = `<svg width="768" height="768" viewBox="0 0 768 768" xmlns="http://www.w3.org/2000/svg"><path d="${blackShapePath}" fill="${FG_COLOR}"/></svg>`;
+                    downloadSVG(svgContent);
+                    return;
+                }
+
+                // 2. Alle "Loch"-Pfade zu einem einzigen Pfad vereinigen
+                let unitedHolesPath = holePaths[0];
+                for (let i = 1; i < holePaths.length; i++) {
+                    // Expliziter Zugriff über window.booleans
+                    unitedHolesPath = window.booleans.union(unitedHolesPath, holePaths[i]);
+                }
+
+                // 3. Den vereinigten "Loch"-Pfad von der Grundform abziehen
+                 // Expliziter Zugriff über window.booleans
+                const finalPathData = window.booleans.difference(blackShapePath, unitedHolesPath);
+
+                const svgContent = `
+                    <svg width="768" height="768" viewBox="0 0 768 768" xmlns="http://www.w3.org/2000/svg">
+                        <path d="${finalPathData}" fill="${FG_COLOR}"/>
+                    </svg>
+                `;
+
+                downloadSVG(svgContent);
+
+            } catch(e) {
+                console.error("Fehler bei der SVG-Generierung:", e);
+                alert("Ein Fehler ist aufgetreten. Bitte versuchen Sie es mit einfacheren Einstellungen erneut.");
+            } finally {
+                downloadBtn.disabled = false;
+                downloadBtn.textContent = originalText;
+            }
+        }
+        
+        function downloadSVG(svgContent) {
+            const blob = new Blob([svgContent.trim()], {type: "image/svg+xml;charset=utf-8"});
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'destructured_shape.svg';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }
+
+        function updateLabels() {
+            Object.keys(sliders).forEach(key => {
+                const valueEl = document.getElementById(`${key}-value`);
+                if (valueEl) {
+                    let value = parseFloat(sliders[key].value);
+                    if (['jitter', 'pixelSize'].includes(key)) {
+                        valueEl.textContent = parseInt(value);
+                    } else {
+                        valueEl.textContent = value.toFixed(2);
+                    }
+                }
+            });
+        }
+
+        new p5(sketch);
+    </script>
+</body>
+</html>
+
