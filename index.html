@@ -3,18 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SVG Destructor mit p5.js</title>
+    <title>SVG Destructor</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
-    <!-- Bibliothek für Boolean-Operationen auf SVG-Pfaden -->
-    <script src="https://unpkg.com/svg-path-booleans@1.0.0/dist/booleans.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
         body {
             font-family: 'Inter', sans-serif;
-            overflow: hidden; /* Verhindert Scrollbalken durch das Canvas */
+            overflow-y: auto !important;
         }
         input[type="range"] {
             accent-color: #0891b2; /* Dunkleres Cyan für besseren Kontrast */
@@ -24,211 +22,263 @@
             max-width: 768px; /* Entspricht der Viewbox-Größe für 1:1 Mapping */
             aspect-ratio: 1 / 1;
         }
-        #download-btn:disabled {
+        #download-btn:disabled, #generate-char-btn:disabled {
             cursor: not-allowed;
             background-color: #67e8f9;
         }
+        .spinner {
+            border-color: transparent;
+            border-top-color: white;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
     </style>
 </head>
-<body class="bg-gray-100 text-gray-900 min-h-screen flex items-center justify-center p-4 relative">
+<body class="bg-gray-100 text-gray-900 min-h-screen flex flex-col md:flex-row items-center justify-center p-4 md:p-8 gap-4 md:gap-8">
 
     <!-- Container für die p5.js Canvas -->
-    <div id="canvas-container"></div>
+    <div id="canvas-container" class="shadow-2xl rounded-2xl overflow-hidden w-full md:w-auto"></div>
 
     <!-- Container für die Steuerungselemente -->
-    <div class="absolute bottom-4 right-4 w-full max-w-xs bg-white/80 backdrop-blur-sm rounded-2xl shadow-2xl p-4 border border-gray-200">
-        <h1 class="text-xl font-bold text-cyan-700 text-center mb-4">Destructor</h1>
-        <div class="space-y-4">
+    <div class="w-full max-w-sm bg-white/80 backdrop-blur-sm rounded-2xl shadow-2xl p-4 md:p-6 border border-gray-200 self-center">
+        <h1 class="text-xl md:text-2xl font-bold text-cyan-700 text-center mb-4 md:mb-6">SVG Destructor</h1>
+        
+        <!-- Zeichen-Eingabe -->
+        <div class="bg-cyan-50 border-2 border-cyan-200 rounded-xl p-3 md:p-4 mb-4 md:mb-6">
+            <h2 class="text-base md:text-lg font-semibold text-cyan-800 mb-2 md:mb-3 text-center">Zeichen laden</h2>
+            <div>
+                <label for="char-input" class="text-xs font-medium text-gray-600">Buchstabe/Ziffer eingeben</label>
+                <div class="flex gap-2">
+                    <input id="char-input" type="text" maxlength="1" placeholder="z.B. B" value="A" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition">
+                </div>
+            </div>
+        </div>
+
+        <div class="space-y-3 md:space-y-4">
             <!-- Regler -->
             <div>
                 <label for="density" class="flex justify-between items-center text-xs font-medium text-gray-600">
-                    <span>Pixel-Dichte</span>
-                    <span id="density-value" class="font-mono text-cyan-700">1.0</span>
+                    <span>Grid-Auflösung</span>
+                    <span id="density-value" class="font-mono text-cyan-700">20</span>
                 </label>
-                <input id="density" type="range" min="0.2" max="5" value="1.0" step="0.1" class="w-full h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer">
+                <input id="density" type="range" min="5" max="50" value="20" step="1" class="w-full h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer">
             </div>
             <div>
                 <label for="noise" class="flex justify-between items-center text-xs font-medium text-gray-600">
-                    <span>Störung (Ausbrüche)</span>
-                    <span id="noise-value" class="font-mono text-cyan-700">0.10</span>
+                    <span>Störung (Lücken)</span>
+                    <span id="noise-value" class="font-mono text-cyan-700">0.50</span>
                 </label>
-                <input id="noise" type="range" min="0" max="1" value="0.1" step="0.01" class="w-full h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer">
+                <input id="noise" type="range" min="0" max="1" value="0.5" step="0.01" class="w-full h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer">
+            </div>
+            <div>
+                <label for="focus" class="flex justify-between items-center text-xs font-medium text-gray-600">
+                    <span>Lücken-Fokus</span>
+                    <span id="focus-value" class="font-mono text-cyan-700">1.00</span>
+                </label>
+                <input id="focus" type="range" min="0.1" max="10" value="1.0" step="0.1" class="w-full h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer">
             </div>
             <div>
                 <label for="jitter" class="flex justify-between items-center text-xs font-medium text-gray-600">
                     <span>Verschiebung (Jitter)</span>
-                    <span id="jitter-value" class="font-mono text-cyan-700">10</span>
+                    <span id="jitter-value" class="font-mono text-cyan-700">2</span>
                 </label>
-                <input id="jitter" type="range" min="0" max="50" value="10" step="1" class="w-full h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer">
+                <input id="jitter" type="range" min="0" max="20" value="2" step="1" class="w-full h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer">
             </div>
             <div>
                 <label for="pixelSize" class="flex justify-between items-center text-xs font-medium text-gray-600">
-                    <span>Pixel-Größe</span>
-                    <span id="pixelSize-value" class="font-mono text-cyan-700">12</span>
+                    <span>Größen-Variation</span>
+                    <span id="pixelSize-value" class="font-mono text-cyan-700">1.0</span>
                 </label>
-                <input id="pixelSize" type="range" min="2" max="50" value="12" step="1" class="w-full h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer">
+                <input id="pixelSize" type="range" min="0.1" max="2.0" value="1.0" step="0.1" class="w-full h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer">
             </div>
         </div>
-        <div class="mt-6 text-center">
-            <button id="download-btn" class="w-full bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-2 px-4 rounded-lg transition-all duration-300 ease-in-out text-sm">
-                SVG Herunterladen
+        <div class="mt-4 md:mt-6 text-center">
+            <button id="download-btn" class="w-full bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-2 md:py-3 px-4 rounded-lg transition-all duration-300 ease-in-out text-sm md:text-base flex items-center justify-center">
+                <span class="btn-text">SVG Herunterladen</span>
+                <div class="spinner w-5 h-5 rounded-full border-2 border-white hidden"></div>
             </button>
         </div>
     </div>
 
-    <!-- Das originale SVG, unsichtbar, nur als Datenquelle -->
-    <svg width="0" height="0" style="position:absolute; visibility: hidden;">
-      <path id="original-path" d="M764.635 768H565.385L514.821 606.952H249.93L199.471 768H0.220703L259.021 0.964844H505.835L764.635 768ZM294.051 466.13H470.607L385.237 194.222H379.244L294.051 466.13Z"/>
-    </svg>
-
     <script>
-        // UI-Elemente
+        // --- UI-Elemente ---
         const sliders = {
             density: document.getElementById('density'),
             noise: document.getElementById('noise'),
+            focus: document.getElementById('focus'),
             jitter: document.getElementById('jitter'),
             pixelSize: document.getElementById('pixelSize'),
         };
         const downloadBtn = document.getElementById('download-btn');
+        const charInput = document.getElementById('char-input');
         
-        // Farben
+        // --- Globale Variablen ---
         const BG_COLOR = '#ffffff';
         const FG_COLOR = '#000000';
+        const CANVAS_SIZE = 768;
+        let noiseSeedValue;
+        let offscreenCanvas;
+        let offscreenCtx;
+        let offscreenImageData; // Hält die Pixeldaten für schnelle Abfragen
+        let p5Instance; 
 
-        // p5.js Sketch
+        // --- p5.js Sketch ---
         const sketch = (p) => {
-            const CANVAS_SIZE = 768;
-            let shapeBuffer;
-            let contourPoints = [];
-
+            p5Instance = p; 
+            
             p.setup = () => {
                 const container = document.getElementById('canvas-container');
                 const canvas = p.createCanvas(CANVAS_SIZE, CANVAS_SIZE);
                 canvas.parent(container);
                 p.noLoop();
-                shapeBuffer = p.createGraphics(CANVAS_SIZE, CANVAS_SIZE);
-                drawSvgPathToBuffer();
-                sampleContourPoints();
-                Object.values(sliders).forEach(slider => slider.addEventListener('input', () => {
-                    updateLabels();
-                    p.redraw();
-                }));
-                downloadBtn.addEventListener('click', generateAndDownloadSVG);
+                noiseSeedValue = p.random(10000);
+                p.noiseSeed(noiseSeedValue);
+                
+                setupOffscreenCanvas();
+                updateCharacterCanvas(charInput.value); // Initialen Buchstaben zeichnen
+                addEventListeners();
                 updateLabels();
                 p.redraw();
             };
 
             p.draw = () => {
-                const noise = parseFloat(sliders.noise.value);
+                const resolution = parseInt(sliders.density.value);
+                const threshold = parseFloat(sliders.noise.value);
+                const focus = parseFloat(sliders.focus.value);
                 const jitter = parseFloat(sliders.jitter.value);
-                const baseSize = parseFloat(sliders.pixelSize.value);
-                p.background(BG_COLOR);
-                p.image(shapeBuffer, 0, 0);
-                p.fill(BG_COLOR);
-                p.noStroke();
-                p.rectMode(p.CENTER);
-                for (const point of contourPoints) {
-                    if (p.random() < noise) continue;
-                    const jitterX = p.random(-jitter, jitter);
-                    const jitterY = p.random(-jitter, jitter);
-                    const size = p.random(baseSize * 0.7, baseSize * 1.3);
-                    p.rect(point.x + jitterX, point.y + jitterY, size, size);
-                }
-            };
-            
-            window.sampleContourPoints = () => {
-                const density = parseFloat(sliders.density.value);
-                contourPoints = [];
-                const pathData = document.getElementById('original-path').getAttribute('d');
-                const subPaths = pathData.split(/(?=M)/g).filter(s => s.trim().length > 0);
-                if (subPaths.length === 0) return [];
+                const sizeVariation = parseFloat(sliders.pixelSize.value);
 
-                subPaths.forEach(pathD => {
-                    const tempPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-                    tempPath.setAttribute('d', pathD);
-                    const totalLength = tempPath.getTotalLength();
-                    for (let i = 0; i < totalLength; i += (1 / density)) {
-                        const pt = tempPath.getPointAtLength(i);
-                        contourPoints.push({ x: pt.x, y: pt.y });
-                    }
+                p.background(BG_COLOR);
+                p.fill(FG_COLOR);
+                p.noStroke();
+                p.rectMode(p.CORNER);
+                
+                const step = CANVAS_SIZE / resolution;
+                const baseSize = step * 0.9; 
+                
+                let noiseGenerator;
+                 new p5(p_temp => {
+                    p_temp.setup = () => { p_temp.noCanvas(); p_temp.noiseSeed(noiseSeedValue); noiseGenerator = p_temp.noise; };
                 });
 
-                return contourPoints;
-            }
-
-            function drawSvgPathToBuffer() {
-                const pathData = document.getElementById('original-path').getAttribute('d');
-                const path = new Path2D(pathData);
-                shapeBuffer.drawingContext.fillStyle = FG_COLOR;
-                shapeBuffer.drawingContext.fill(path);
-            }
-            
-            sliders.density.addEventListener('input', () => {
-                sampleContourPoints();
-                updateLabels();
-                p.redraw();
-            });
+                for (let x = 0; x < CANVAS_SIZE; x += step) {
+                    for (let y = 0; y < CANVAS_SIZE; y += step) {
+                        // Überprüft, ob der Pixel in der Mitte der Zelle gesetzt ist
+                        if (isPixelSet(Math.floor(x + step / 2), Math.floor(y + step / 2))) {
+                            const noiseValue = noiseGenerator(x * focus * 0.01, y * focus * 0.01);
+                            
+                            if (noiseValue > threshold) {
+                                const jitterX = p.random(-jitter, jitter);
+                                const jitterY = p.random(-jitter, jitter);
+                                const size = baseSize * p.random(1.0, sizeVariation);
+                                p.rect(x + jitterX, y + jitterY, size, size);
+                            }
+                        }
+                    }
+                }
+            };
         };
+        
+        function setupOffscreenCanvas() {
+            offscreenCanvas = document.createElement('canvas');
+            offscreenCanvas.width = CANVAS_SIZE;
+            offscreenCanvas.height = CANVAS_SIZE;
+            offscreenCtx = offscreenCanvas.getContext('2d', { willReadFrequently: true });
+        }
+
+        // Neue Funktion zum Zeichnen des Buchstabens auf die unsichtbare Canvas
+        function updateCharacterCanvas(char) {
+            offscreenCtx.fillStyle = FG_COLOR;
+            offscreenCtx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+            
+            // Font-Styling
+            const fontSize = 800;
+            offscreenCtx.font = `bold ${fontSize}px "Inter", sans-serif`;
+            offscreenCtx.textAlign = 'center';
+            offscreenCtx.textBaseline = 'middle';
+
+            // Zentriert den Text
+            const x = CANVAS_SIZE / 2;
+            const y = CANVAS_SIZE / 2;
+            offscreenCtx.fillText(char, x, y);
+
+            // Speichert die Pixeldaten für schnelle Abfragen
+            offscreenImageData = offscreenCtx.getImageData(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+            
+            if (p5Instance) {
+                p5Instance.redraw();
+            }
+        }
+        
+        // Überprüft den Alpha-Wert eines Pixels
+        function isPixelSet(x, y) {
+            if (!offscreenImageData) return false;
+            // Index des Alpha-Wertes im 1D-Array der Pixeldaten
+            const index = (y * CANVAS_SIZE + x) * 4 + 3;
+            return offscreenImageData.data[index] > 128; // Toleranz für Antialiasing
+        }
+
+        function addEventListeners() {
+            Object.values(sliders).forEach(slider => slider.addEventListener('input', () => {
+                updateLabels();
+                p5Instance.redraw();
+            }));
+            downloadBtn.addEventListener('click', generateAndDownloadSVG);
+            charInput.addEventListener('input', (e) => {
+                const char = e.target.value.trim().charAt(0).toUpperCase();
+                e.target.value = char; // Stellt sicher, dass nur ein Zeichen im Feld ist
+                if(char) {
+                    updateCharacterCanvas(char);
+                }
+            });
+        }
 
         async function generateAndDownloadSVG() {
-            const originalText = downloadBtn.textContent;
-            downloadBtn.disabled = true;
-            downloadBtn.textContent = 'Verarbeite...';
-
+            toggleLoading(downloadBtn, true);
             try {
-                await new Promise(resolve => setTimeout(resolve, 10));
+                await new Promise(resolve => setTimeout(resolve, 10)); // UI-Update erlauben
 
-                const noise = parseFloat(sliders.noise.value);
+                const resolution = parseInt(sliders.density.value);
+                const threshold = parseFloat(sliders.noise.value);
+                const focus = parseFloat(sliders.focus.value);
                 const jitter = parseFloat(sliders.jitter.value);
-                const baseSize = parseFloat(sliders.pixelSize.value);
-                // Wichtig: Neugenerierung der Punkte für Konsistenz
-                const contourPoints = window.sampleContourPoints();
-                const blackShapePath = document.getElementById('original-path').getAttribute('d');
+                const sizeVariation = parseFloat(sliders.pixelSize.value);
 
-                // 1. Array mit Pfaden für alle "Löcher" erstellen
-                const holePaths = [];
-                for (const point of contourPoints) {
-                    if (Math.random() < noise) continue;
-                    const jitterX = (Math.random() - 0.5) * 2 * jitter;
-                    const jitterY = (Math.random() - 0.5) * 2 * jitter;
-                    const size = (Math.random() * 0.6 + 0.7) * baseSize;
-                    const x = point.x + jitterX - size / 2;
-                    const y = point.y + jitterY - size / 2;
-                    holePaths.push(`M ${x} ${y} h ${size} v ${size} h ${-size} Z`);
+                const step = CANVAS_SIZE / resolution;
+                const baseSize = step * 0.9;
+                
+                let noiseGenerator;
+                new p5(p => { p.setup = () => { p.noCanvas(); p.noiseSeed(noiseSeedValue); noiseGenerator = p.noise; }; });
+
+                let rectElements = '';
+                for (let x = 0; x < CANVAS_SIZE; x += step) {
+                    for (let y = 0; y < CANVAS_SIZE; y += step) {
+                        if (isPixelSet(Math.floor(x + step / 2), Math.floor(y + step / 2))) {
+                            const noiseValue = noiseGenerator(x * focus * 0.01, y * focus * 0.01);
+                            if (noiseValue > threshold) {
+                                const jitterX = (Math.random() - 0.5) * 2 * jitter;
+                                const jitterY = (Math.random() - 0.5) * 2 * jitter;
+                                const size = baseSize * (1.0 + (Math.random() * (sizeVariation - 1.0)));
+                                rectElements += `<rect x="${x + jitterX}" y="${y + jitterY}" width="${size}" height="${size}" fill="${FG_COLOR}" />\n`;
+                            }
+                        }
+                    }
                 }
-
-                if (holePaths.length === 0) {
-                    // Falls keine Löcher generiert wurden, direkt das Original speichern
-                    const svgContent = `<svg width="768" height="768" viewBox="0 0 768 768" xmlns="http://www.w3.org/2000/svg"><path d="${blackShapePath}" fill="${FG_COLOR}"/></svg>`;
-                    downloadSVG(svgContent);
-                    return;
-                }
-
-                // 2. Alle "Loch"-Pfade zu einem einzigen Pfad vereinigen
-                let unitedHolesPath = holePaths[0];
-                for (let i = 1; i < holePaths.length; i++) {
-                    // Expliziter Zugriff über window.booleans
-                    unitedHolesPath = window.booleans.union(unitedHolesPath, holePaths[i]);
-                }
-
-                // 3. Den vereinigten "Loch"-Pfad von der Grundform abziehen
-                 // Expliziter Zugriff über window.booleans
-                const finalPathData = window.booleans.difference(blackShapePath, unitedHolesPath);
-
+                
                 const svgContent = `
                     <svg width="768" height="768" viewBox="0 0 768 768" xmlns="http://www.w3.org/2000/svg">
-                        <path d="${finalPathData}" fill="${FG_COLOR}"/>
+                        ${rectElements}
                     </svg>
                 `;
-
                 downloadSVG(svgContent);
 
             } catch(e) {
                 console.error("Fehler bei der SVG-Generierung:", e);
-                alert("Ein Fehler ist aufgetreten. Bitte versuchen Sie es mit einfacheren Einstellungen erneut.");
+                alert("Ein Fehler ist aufgetreten. Der Export konnte nicht abgeschlossen werden.");
             } finally {
-                downloadBtn.disabled = false;
-                downloadBtn.textContent = originalText;
+                toggleLoading(downloadBtn, false);
             }
         }
         
@@ -243,13 +293,28 @@
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
         }
+        
+        function toggleLoading(button, isLoading) {
+            if (!button) return;
+            const text = button.querySelector('.btn-text');
+            const spinner = button.querySelector('.spinner');
+            if (isLoading) {
+                button.disabled = true;
+                if(text) text.classList.add('hidden');
+                if(spinner) spinner.classList.remove('hidden');
+            } else {
+                button.disabled = false;
+                if(text) text.classList.remove('hidden');
+                if(spinner) spinner.classList.add('hidden');
+            }
+        }
 
         function updateLabels() {
             Object.keys(sliders).forEach(key => {
                 const valueEl = document.getElementById(`${key}-value`);
                 if (valueEl) {
                     let value = parseFloat(sliders[key].value);
-                    if (['jitter', 'pixelSize'].includes(key)) {
+                    if (['jitter', 'density'].includes(key)) {
                         valueEl.textContent = parseInt(value);
                     } else {
                         valueEl.textContent = value.toFixed(2);
@@ -262,4 +327,5 @@
     </script>
 </body>
 </html>
+
 
