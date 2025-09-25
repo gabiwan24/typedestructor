@@ -21,6 +21,7 @@
             width: 100%;
             max-width: 768px; /* Entspricht der Viewbox-Größe für 1:1 Mapping */
             aspect-ratio: 1 / 1;
+            cursor: move; /* Zeigt an, dass die Fläche verschiebbar ist */
         }
         #download-btn:disabled, #generate-char-btn:disabled {
             cursor: not-allowed;
@@ -121,8 +122,15 @@
         let noiseSeedValue;
         let offscreenCanvas;
         let offscreenCtx;
-        let offscreenImageData; // Hält die Pixeldaten für schnelle Abfragen
+        let offscreenImageData;
         let p5Instance; 
+
+        // Variablen für Drag&Drop
+        let charOffsetX = 0;
+        let charOffsetY = 0;
+        let isDragging = false;
+        let dragStartX, dragStartY;
+
 
         // --- p5.js Sketch ---
         const sketch = (p) => {
@@ -165,7 +173,6 @@
 
                 for (let x = 0; x < CANVAS_SIZE; x += step) {
                     for (let y = 0; y < CANVAS_SIZE; y += step) {
-                        // Überprüft, ob der Pixel in der Mitte der Zelle gesetzt ist
                         if (isPixelSet(Math.floor(x + step / 2), Math.floor(y + step / 2))) {
                             const noiseValue = noiseGenerator(x * focus * 0.01, y * focus * 0.01);
                             
@@ -179,6 +186,27 @@
                     }
                 }
             };
+
+            // Event-Handler für Drag & Drop
+            p.mousePressed = () => {
+                if (p.mouseX > 0 && p.mouseX < CANVAS_SIZE && p.mouseY > 0 && p.mouseY < CANVAS_SIZE) {
+                    isDragging = true;
+                    dragStartX = p.mouseX - charOffsetX;
+                    dragStartY = p.mouseY - charOffsetY;
+                }
+            };
+
+            p.mouseDragged = () => {
+                if (isDragging) {
+                    charOffsetX = p.mouseX - dragStartX;
+                    charOffsetY = p.mouseY - dragStartY;
+                    updateCharacterCanvas(charInput.value);
+                }
+            };
+
+            p.mouseReleased = () => {
+                isDragging = false;
+            };
         };
         
         function setupOffscreenCanvas() {
@@ -188,23 +216,19 @@
             offscreenCtx = offscreenCanvas.getContext('2d', { willReadFrequently: true });
         }
 
-        // Neue Funktion zum Zeichnen des Buchstabens auf die unsichtbare Canvas
         function updateCharacterCanvas(char) {
             offscreenCtx.fillStyle = FG_COLOR;
             offscreenCtx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
             
-            // Font-Styling
             const fontSize = 800;
             offscreenCtx.font = `bold ${fontSize}px "Inter", sans-serif`;
             offscreenCtx.textAlign = 'center';
             offscreenCtx.textBaseline = 'middle';
 
-            // Zentriert den Text
-            const x = CANVAS_SIZE / 2;
-            const y = CANVAS_SIZE / 2;
+            const x = CANVAS_SIZE / 2 + charOffsetX;
+            const y = CANVAS_SIZE / 2 + charOffsetY;
             offscreenCtx.fillText(char, x, y);
-
-            // Speichert die Pixeldaten für schnelle Abfragen
+            
             offscreenImageData = offscreenCtx.getImageData(0, 0, CANVAS_SIZE, CANVAS_SIZE);
             
             if (p5Instance) {
@@ -212,12 +236,10 @@
             }
         }
         
-        // Überprüft den Alpha-Wert eines Pixels
         function isPixelSet(x, y) {
-            if (!offscreenImageData) return false;
-            // Index des Alpha-Wertes im 1D-Array der Pixeldaten
+            if (!offscreenImageData || x < 0 || y < 0 || x >= CANVAS_SIZE || y >= CANVAS_SIZE) return false;
             const index = (y * CANVAS_SIZE + x) * 4 + 3;
-            return offscreenImageData.data[index] > 128; // Toleranz für Antialiasing
+            return offscreenImageData.data[index] > 128; 
         }
 
         function addEventListeners() {
@@ -228,7 +250,7 @@
             downloadBtn.addEventListener('click', generateAndDownloadSVG);
             charInput.addEventListener('input', (e) => {
                 const char = e.target.value.trim().charAt(0).toUpperCase();
-                e.target.value = char; // Stellt sicher, dass nur ein Zeichen im Feld ist
+                e.target.value = char;
                 if(char) {
                     updateCharacterCanvas(char);
                 }
@@ -238,7 +260,7 @@
         async function generateAndDownloadSVG() {
             toggleLoading(downloadBtn, true);
             try {
-                await new Promise(resolve => setTimeout(resolve, 10)); // UI-Update erlauben
+                await new Promise(resolve => setTimeout(resolve, 10));
 
                 const resolution = parseInt(sliders.density.value);
                 const threshold = parseFloat(sliders.noise.value);
